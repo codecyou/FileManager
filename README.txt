@@ -15,6 +15,7 @@ FileManager程序说明
 │      
 ├─core
 │      backup.py  # 文件同步备份模块1
+│      check.py  # 用于实现校验功能的函数
 │      compare_file.py  # 比对文本文件内容模块
 │      file_dir_syn.py  # 文件同步，比对备份端目录变更模块
 │      get_img_thread.py  # 提取视频帧图像模块
@@ -39,7 +40,7 @@ FileManager程序说明
 		
 
 使用说明:
-1.程序所需第三方包opencv,pillow,windnd
+1.程序所需第三方包opencv,pillow,windnd,moviepy,natsort
 安装 pip install 
 
 2.运行方式 python filemanager.py
@@ -52,8 +53,10 @@ FileManager程序说明
 
 程序模块说明：
 view.py 类说明
+BaseFrame  所有视图类的基类
 ExportFrame 导出文件信息
 QuerySameFrame  文件查重
+FindSameFilesByHashFrame  文件去重（hash值方式）
 SynFrame  文件备份同步
 RestoreFrame  还原文件
 ClearEmptyDirFrame  清空空文件夹
@@ -67,6 +70,13 @@ CalImgSimFrame  计算图片相似度
 CalVideoSimFrame  查找相似视频
 SearchImgFrame  以图搜图
 SearchVideoFrame  以视频搜相似视频
+GetAudioFrame  提取音频/转换音频格式
+VideoMergeFrame  合并视频
+VideoCutFrame  视频裁剪
+VideosCutFrame  批量视频裁剪
+GetTimestampFrame  获取时间戳/时间与时间戳相互转换
+ChangeTimestampFrame  修改文件时间戳
+FindBadVideoFrame  查找损坏或不完整的视频文件
 SettingFrame  设置界面
 AboutFrame  关于界面
 
