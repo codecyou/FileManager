@@ -23,7 +23,8 @@
 有操作都有日志，方便追溯和还原。涉及程序配置内容修改的操作会有权限验证
 
 使用说明:
-方式一：源码运行，
+方式一：
+源码运行，
     注意：运行源码如果不是在pycharm中运行，项目代码所有目录下都要新建一个空白__init__.py文件
     1.程序所需第三方包opencv,pillow,windnd,moviepy,natsort
     安装 pip install xxxx
@@ -31,6 +32,7 @@
     运行方式 python filemanager.py
 
 方式二：
+运行打包好的exe
 直接下载打包好的filemanager.zip
 解压后运行目录下的filemanager.exe 即可
 
