@@ -4,23 +4,6 @@ import time
 from conf import settings
 
 
-def dialog_logger(ask, answer, quit_flag=False):
-    """
-    用于保存对话日志
-    :param ask: 问题
-    :param answer: 回答
-    :param quit_flag: 退出程序标志
-    :return:
-    """
-    # 加入实时时间
-    local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    if quit_flag:
-        answer = "exit the system!"
-    f = open(settings.LOG_PATH["dialog"], 'a', encoding='utf-8')
-    f.write("%s\t ask:%s\t answer:%s\n" % (local_time, ask, str(answer)))
-    f.close()
-
-
 def error_logger(error_msg):
     """
     用于保存错误日志
@@ -72,7 +55,7 @@ def operate_logger(msg, has_time=''):
         else:
             # 加入实时时间
             local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            msg = "%s\t %s\n" % (local_time, msg)
+            msg = "%s\t%s\n" % (local_time, msg)
         f.write(msg)
         print(msg)  # 输出到屏幕
 
@@ -107,16 +90,18 @@ def backup_logger(result, src_path, dst_path, safe_del_dirname, option):
     del_file = "file_only_in_dst"
     del_dir = "dir_only_in_dst"
 
-    msg = ''
+    msg = '【文件同步与备份】  '
     if "backup_full" == option:
-        msg = "同步备份完成！新增%s个项目,删除%s个项目,更新%s个项目" % (only_in_src_count, only_in_dst_count, update_count)
+        msg += "同步备份完成！新增%s个项目,删除%s个项目,更新%s个项目" % (only_in_src_count, only_in_dst_count, update_count)
     if "backup_update" == option:
-        msg = "增量备份完成！新增%s个项目,删除0个项目,更新%s个项目" % (only_in_src_count, update_count)
+        msg += "增量备份完成！新增%s个项目,删除0个项目,更新%s个项目" % (only_in_src_count, update_count)
     if "recovery" == option:
-        msg = "同步还原完成！新增%s个项目,删除%s个项目,更新%s个项目" % (only_in_dst_count, only_in_src_count, update_count)
+        msg += "同步还原完成！新增%s个项目,删除%s个项目,更新%s个项目" % (only_in_dst_count, only_in_src_count, update_count)
         # src_path, dst_path = dst_path, src_path  # 传进来的实参已经置换过
         add_file, del_file = del_file, add_file
         add_dir, del_dir = del_dir, add_dir
+    if "only_add" == option:
+        msg += "仅新增文件完成！新增%s个项目" % only_in_src_count
 
     # 将操作记录保存到操作日志'log/operate.log'文件
     if safe_del_dirname:
@@ -153,12 +138,13 @@ def backup_logger(result, src_path, dst_path, safe_del_dirname, option):
                 for item in result[add_dir]:
                     f.write("%s\n" % item)
         # 记录更新
-        if update_count:
-            f.write("更新(文件%s个)：\n" % update_count)
-            for item in result["diff_files"]:
-                f.write("%s\n" % item)
-            for item in result["common_funny"]:
-                f.write("%s\n" % item)
+        if "only_add" != option:
+            if update_count:
+                f.write("更新(文件%s个)：\n" % update_count)
+                for item in result["diff_files"]:
+                    f.write("%s\n" % item)
+                for item in result["common_funny"]:
+                    f.write("%s\n" % item)
 
         # 记录删除
         if "backup_update" != option:
@@ -174,7 +160,7 @@ def backup_logger(result, src_path, dst_path, safe_del_dirname, option):
                         f.write("%s\n" % item)
         f.write("\n")
 
-    return msg+operate_msg
+    return operate_msg
 
 
 def record_logger(file_list, record_path, msg):
@@ -189,6 +175,22 @@ def record_logger(file_list, record_path, msg):
     local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     # 向日志文件中记录详情
     operate_logger(msg, local_time)
+    with open(record_path, 'a', encoding='utf-8') as f:
+        f.write("-" * 100)
+        f.write("\n%s\n" % msg)
+        for item in file_list:
+            f.write("%s\n" % item)
+        f.write("\n")
+
+
+def record_logger2(file_list, record_path, msg):
+    """
+    用于保存删除记录操作日志, 不调用operate_logger
+    :param file_list: 已被删除的文件列表
+    :param record_path: 要导出记录地址
+    :param msg要记录到日志的信息
+    :return:
+    """
     with open(record_path, 'a', encoding='utf-8') as f:
         f.write("-" * 100)
         f.write("\n%s\n" % msg)

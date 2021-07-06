@@ -1,58 +1,8 @@
 """所有view模块中的校验函数"""
-import tkinter as tk
-from tkinter import ttk
 from tkinter import messagebox as mBox
 import os
-import threading
-import traceback
-import time
-from core import Mytools
 from core import logger
-
-
-def check_path_arg(*pargs, **pkwargs):  # 这是一个装饰器   失败了！！ 变成装饰器的时候传的参数就要定下来而不是后面在确定
-    """
-    装饰器，用于检测输入的路径是否存在
-    :param pargs: 给装饰器传的参数
-    :param pkwargs: 给装饰器传的参数
-    :return:
-    """
-
-    def check_path(func):
-        def wrapped_func(self, *args, **kwargs):
-            create_flag = False
-            if len(pkwargs):  # 检查是否存在"create_flag"， True 当目录路径不存在时，创建目录 False 不创建
-                if "create_flag" in kwargs:
-                    create_flag = kwargs["create_flag"]
-            if len(pargs):
-                for item in args:
-                    path_ = Mytools.check_path(item, create_flag)
-                    if path_ is None:
-                        mBox.showerror("路径不存在！", "%s  不存在！请检查！" % item)
-                        return
-            return func(self, *args, **kwargs)
-
-        return wrapped_func
-
-    return check_path
-
-
-def check_path_flag(flag=False):  # 这是一个装饰器   失败了！！ 变成装饰器的时候传的参数就要定下来而不是后面在确定
-    """
-    装饰器，用于检测输入的路径是否存在
-    :return:
-    """
-
-    def check_path(func):
-        def wrapped_func(self, *args, **kwargs):
-            if flag is False:
-                mBox.showerror("您输入的路径有误！", "您输入的路径有误！请检查")
-                return
-            return func(self, *args, **kwargs)
-
-        return wrapped_func
-
-    return check_path
+import traceback
 
 
 def check_path(pathObj, create_flag=False):

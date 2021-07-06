@@ -5,6 +5,8 @@ import os
 import shutil
 import time
 import platform
+import re
+import exifread
 
 
 def my_init():
@@ -44,6 +46,17 @@ def get_local_time(strf_str, timestamp=None):
     return time.strftime(strf_str, time.localtime())
 
 
+def get_time_now():
+    """
+    获取当前时间和标准时间字符串信息 "%Y-%m-%d %H:%M:%S"
+    :return: {"time_str": time_str, "timestamp":timestamp}
+    """
+    timestamp = time.time()
+    time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
+    result = {"time_str": time_str, "timestamp": timestamp}
+    return result
+
+
 def get_times():
     """
     用于获取当前时间的两种格式， 保证日志记录时间和文件记录文件名同步
@@ -53,6 +66,55 @@ def get_times():
     local_time1 = time.strftime("%Y%m%d%H%M%S", local_time)  # 用来生成文件名
     local_time2 = time.strftime("%Y-%m-%d %H:%M:%S", local_time)  # 用来记录传递给日志函数的时间
     return local_time1, local_time2
+
+
+def changeStrToTime(time_str):
+    """用于将字符串转为时间 三种时间格式20210201135059,2021.2.1.13.05.59,2021-2-1-13-6-59"""
+    # print("time_str:", time_str)
+    time_a = re.search(r"(\d{4})[-\.](\d{1,2})[-\.](\d{1,2})[-\.]? *(\d{1,2})[-\.:：](\d{1,2})[-\.:：](\d{1,2})", time_str.strip())
+    if time_a:
+        # 匹配时间格式2021.2.1,2021-2-1
+        time_y = time_a.group(1)
+        time_m = time_a.group(2)
+        time_d = time_a.group(3)
+        time_H = time_a.group(4)
+        time_M = time_a.group(5)
+        time_S = time_a.group(6)
+    # 匹配时间格式20210201135059
+    elif (time_str.isdigit()) and (len(time_str) == 14):
+        time_y = time_str[0:4]
+        time_m = time_str[4:6]
+        time_d = time_str[6:8]
+        time_H = time_str[8:10]
+        time_M = time_str[10:12]
+        time_S = time_str[12:]
+    else:
+        return
+    # 筛选格式
+    if (not len(time_y) == 4) or (not (int(time_m) in range(1, 13))) or (not (int(time_d) in range(1, 32))):
+        return
+    # 判断月份取值范围是否正常
+    if (time_m in ['4', '6', '9', '11']) and (time_d == "31"):
+        return
+    if time_m == '2':
+        if time_d in ['30', '31']:
+            return
+        if (time_d == '29') and ((int(time_y) % 4) != 0):
+            return
+    # 判断时间取值范围是否正常
+    for item in [time_H, time_M, time_S]:
+        if int(item) not in range(0, 60):
+            return
+    # 将"2021-2-1" 转为 "2021-02-01"
+    # if len(time_m) < 2:
+    #     time_m = '0' + time_m
+    time_m = time_m.zfill(2)
+    time_d = time_d.zfill(2)
+    time_H = time_H.zfill(2)
+    time_M = time_M.zfill(2)
+    time_S = time_S.zfill(2)
+    new_time_str = "%s-%s-%s %s:%s:%s" % (time_y, time_m, time_d, time_H, time_M, time_S)  # '%Y-%m-%d %H:%M:%S'
+    return new_time_str
 
 
 def make_str(temp_str, *args):
@@ -218,7 +280,7 @@ def make_dirs(src_path, dst_path):
         for new_dir in dir_str_list:
             if not os.path.exists(new_dir):
                 os.makedirs(new_dir)
-    msg = "拷贝%s 的目录结构到%s 完成！" % (src_path, dst_path)
+    msg = "【拷贝目录结构】  拷贝 %s 的目录结构到 %s 完成！" % (src_path, dst_path)
     logger.operate_logger(msg)
     return msg, dir_str_list
 
@@ -252,7 +314,7 @@ def export_dirs(dir_path):
         with open(record_path, "w", encoding="utf-8") as f:
             for item in dir_list:
                 f.write("%s\n" % item)
-        logger.operate_logger("导出%s 的目录结构信息到%s 完成！" % (dir_path, record_path))
+        logger.operate_logger("【拷贝目录结构】  导出 %s 的目录结构信息到 %s 完成！" % (dir_path, record_path))
         return record_path, dir_list
     else:
         print("该目录没有子目录！")
@@ -293,6 +355,86 @@ def copy_file(src_path, dst_path, del_flag=False):
                 logger.error_logger(e)
         if del_flag:  # 判断是否要删除
             os.remove(src_path)
+
+
+def copy_file_force(src_path, dst_path):
+    """
+    用于拷贝文件, 遇同名文件直接覆盖
+    :param src_path:  源路径
+    :param dst_path:  目的路径
+    :param del_flag:   标记是否要删除 True 删除源文件 False 不删除
+    :return: 0 失败 1 成功 2 跳过
+    """
+    flag = 0
+    if os.path.isdir(src_path):  # 如果是文件夹
+        try:
+            shutil.copytree(src_path, dst_path)
+            flag = 1
+        except Exception as e:
+            # 如果目标目录不存在则会报此错误，比如shutil.copy2(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+            dst_dir = os.path.dirname(dst_path)
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+                shutil.copytree(src_path, dst_path)
+                flag = 1
+            else:
+                logger.error_logger(e)
+    else:
+        try:
+            shutil.copy2(src_path, dst_path)
+            flag = 1
+        except Exception as e:
+            # 如果目标目录不存在则会报此错误，比如shutil.copy2(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+            dst_dir = os.path.dirname(dst_path)
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+                shutil.copy2(src_path, dst_path)
+                flag = 1
+            else:
+                logger.error_logger(e)
+
+    return flag
+
+
+def copy_file_skip(src_path, dst_path):
+    """
+    用于拷贝文件, 遇同名文件直接跳过
+    :param src_path:  源路径
+    :param dst_path:  目的路径
+    :return:0 失败 1 成功 2 跳过
+    """
+    flag = 0
+    if os.path.exists(dst_path):
+        print("dst_path: %s 已存在，已跳过该项目！" % dst_path)
+        return 2
+    if os.path.isdir(src_path):  # 如果是文件夹
+        try:
+            shutil.copytree(src_path, dst_path)
+            flag = 1
+        except Exception as e:
+            # 如果目标目录不存在则会报此错误，比如shutil.copy2(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+            dst_dir = os.path.dirname(dst_path)
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+                shutil.copytree(src_path, dst_path)
+                flag = 1
+            else:
+                logger.error_logger(e)
+    else:
+        try:
+            shutil.copy2(src_path, dst_path)
+            flag = 1
+        except Exception as e:
+            # 如果目标目录不存在则会报此错误，比如shutil.copy2(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+            dst_dir = os.path.dirname(dst_path)
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+                shutil.copy2(src_path, dst_path)
+                flag = 1
+            else:
+                logger.error_logger(e)
+
+    return flag
 
 
 def copy_file2(src_path, dst_path, failed_list):
@@ -371,6 +513,57 @@ def move_file(src_path, dst_path):
         else:
             # logger.file_error_logger(src_path, e)
             logger.error_logger(e)
+
+
+def move_file_force(src_path, dst_path):
+    """
+    用于剪切文件, 遇到同名文件则会覆盖
+    :param src_path:  源路径
+    :param dst_path:  目的路径
+    :return:0 失败 1 成功 2 跳过
+    """
+    flag = 0
+    try:
+        shutil.move(src_path, dst_path)
+        flag = 1
+    except Exception as e:
+        # 如果目标目录不存在则会报错，比如shutil.move(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+        dst_dir = os.path.dirname(dst_path)
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+            shutil.move(src_path, dst_path)
+            flag = 1
+        else:
+            # logger.file_error_logger(src_path, e)
+            logger.error_logger(e)
+    return flag
+
+
+def move_file_skip(src_path, dst_path):
+    """
+    用于剪切文件, 遇到同名文件则会跳过
+    :param src_path:  源路径
+    :param dst_path:  目的路径
+    :return:0 失败 1 成功 2 跳过
+    """
+    flag = 0
+    if os.path.exists(dst_path):
+        print("dst_path: %s 已存在，已跳过该文件！" % dst_path)
+        return 2
+    try:
+        shutil.move(src_path, dst_path)
+        flag = 1
+    except Exception as e:
+        # 如果目标目录不存在则会报错，比如shutil.move(r'C:1\1.jpg', r'd:1\1.jpg'),而D盘不存在1文件夹
+        dst_dir = os.path.dirname(dst_path)
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir)  # os.makedirs可递归创建文件夹
+            shutil.move(src_path, dst_path)
+            flag = 1
+        else:
+            # logger.file_error_logger(src_path, e)
+            logger.error_logger(e)
+    return flag
 
 
 def move_file2(src_path, dst_path, failed_list):
@@ -475,9 +668,10 @@ def make_new_path(file_path, old_dir_path, new_dir_path, name_simple=True):
     else:  # 是linux  因为windows的路径分隔符也可以使用/
         dir_str = dir_str.replace(':', '').replace("/", "_")  # 用来记录原文件的目录结构 格式"C_Users_pro_PycharmProjects"
     if file_basename.count('.'):
-        new_file_name = "%s_[%s].%s" % (file_basename, dir_str, file_basename.split('.')[-1])
+        # 防止出现'_[].mp4'的情况，当目录层次一样时文件名不变
+        new_file_name = "%s_[%s].%s" % (file_basename, dir_str, file_basename.split('.')[-1]) if len(dir_str) else file_basename
     else:
-        new_file_name = "%s_[%s]" % (file_basename, dir_str)
+        new_file_name = "%s_[%s]" % (file_basename, dir_str) if len(dir_str) else file_basename
     new_path = os.path.join(new_dir_path, new_file_name)
 
     return new_path
@@ -531,14 +725,14 @@ def move_or_copy_file(files, old_dir_path, new_dir_path, deal_mode="move", name_
     # 写出到记录文件和日志
     if len(new_old_record):
         write_time, log_time = get_times()  # 获取当前时间的两种格式
-        record_path = os.path.join(settings.RECORD_DIR, '%s %s.txt' % ("new_old_record", write_time))
+        record_path = os.path.join(settings.RECORD_DIR, '%s_%s.txt' % ("new_old_record", write_time))
         export_new_old_record(new_old_record, record_path)  # 将文件剪切前后文件信息导出到new_old_record
         if deal_mode == 'copy':
-            msg = "从%s 拷贝%s个文件到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
+            msg = "从 %s 拷贝 %s 个文件到 %s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
         else:
-            msg = "从%s 剪切%s个文件到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
+            msg = "从 %s 剪切 %s 个文件到 %s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
         if len(failed_list):
-            failed_path = os.path.join(settings.RECORD_DIR, '%s %s.txt' % ("failed", write_time))
+            failed_path = os.path.join(settings.RECORD_DIR, '%s_%s.txt' % ("failed", write_time))
             msg += "\n\t\t%s个文件操作失败，文件信息导出到%s" % (len(failed_list), failed_path)
             with open(failed_path, 'a', encoding="utf-8") as f:
                 for item in failed_list:
@@ -549,13 +743,14 @@ def move_or_copy_file(files, old_dir_path, new_dir_path, deal_mode="move", name_
     return record_path
 
 
-def deal_files(files, old_dir_path, new_dir_path, deal_mode="move", rename_flag=True, name_simple=True, log_flag=True):
+def deal_files(files, old_dir_path, new_dir_path, deal_mode="move", same_file_option='skip', rename_flag=True, name_simple=True, log_flag=True):
     """
     用于移动或者复制文件，并将新旧文件名记录到new_old_record,并导出文件   
     :param files: 保存文件信息的集合，可以是dict {name|size|name_size : [path1,path2]} 可以是list [path1,path2]
     :param old_dir_path: 原目录路径
     :param new_dir_path: 新目录路径
     :param deal_mode: 文件处理模式  "move" 剪切  "copy" 复制
+    :param same_file_option: 同名文件处理模式  "overwrite" 覆盖  "skip" 跳过
     :param rename_flag: 标记是否对文件进行重命名  True 重命名  False 不重命名        主要用在是否原样复制文件 还是加入目录结构
     :param name_simple: 文件重命名模式  True 简单目录结构  False 绝对目录结构
     :param log_flag: 标记是否记录日志  True 记录  False 不记录
@@ -563,11 +758,92 @@ def deal_files(files, old_dir_path, new_dir_path, deal_mode="move", rename_flag=
     """""
     new_old_record = {}  # 用于保存新旧文件名信息，格式为"{new_file: old_file, }"
     record_path = None  # 用来记录导出的新旧文件名记录路径 用于返回
+    failed_path = None  # 用来记录导出失败的文件名记录路径
     failed_list = []  # 用于记录拷贝或剪切失败的文件信息
+    skip_list = []  # 用来记录跳过的文件信息
+    total_count = 0  # 项目总数，目录数+文件数
+    result = {}  # 返回的结果 数据格式 {"record_path": record_path, 'new_old_record'：new_old_record,'skip_list':skip_list, 'failed_list':failed_list}
     if deal_mode == "copy":
-        deal_func = copy_file  # 根据模式将函数名赋值给deal_func变量
+        deal_func = copy_file_force if same_file_option == 'overwrite' else copy_file_skip  # 根据模式将函数名赋值给deal_func变量
     else:
-        deal_func = move_file
+        deal_func = move_file_force if same_file_option == 'overwrite' else move_file_skip
+    if rename_flag:  # 看是否需要对文件进行重命名，即是否需要加上目录描述
+        # 从多级目录往单级目录里面拷贝或者移动文件时可能会出现同名文件，所有加上对应目录层级描述
+        # 格式：当name_simple为True 为相对目标目录的目录层级  为False 为原文件的绝对目录层级
+        get_new_path_func = make_new_path
+    else:
+        # 简单的将一个目录的文件剪切或拷贝到另一目录
+        # 匿名函数实现文件目录替换  其中none_para 是无用参数 只为参数占位 方便后面统一传参使用
+        get_new_path_func = lambda file_path, old_dir, new_dir, none_para: file_path.replace(old_dir, new_dir)
+    if isinstance(files, dict):
+        for item in files:
+            total_count += len(files[item])
+            for old_path in files[item]:
+                new_path = get_new_path_func(old_path, old_dir_path, new_dir_path, name_simple)  # 调用make_new_path方法 获得新路径
+                try:
+                    res_flag = deal_func(old_path, new_path)  # 由上面赋值的函数名变量调用函数代码
+                except Exception as e:
+                    failed_list.append(old_path)
+                    print("操作%s文件失败，详情请查看错误日志！" % old_path)
+                    # logger.error_logger(e)
+                    logger.file_error_logger(old_path, e)
+                else:
+                    if res_flag == 0:
+                        failed_list.append(old_path)
+                    elif res_flag == 2:
+                        skip_list.append(old_path)
+                    else:
+                        new_old_record[new_path] = old_path  # 保存原文件信息，格式为"{new_file: old_file, }"
+    elif isinstance(files, list):
+        total_count += len(files)
+        for old_path in files:
+            new_path = get_new_path_func(old_path, old_dir_path, new_dir_path, name_simple)  # 调用make_new_path方法 获得新路径
+            try:
+                res_flag = deal_func(old_path, new_path)
+            except Exception as e:
+                failed_list.append(old_path)
+                print("操作%s文件失败，详情请查看错误日志！" % old_path)
+                # logger.error_logger(e)
+                logger.file_error_logger(old_path, e)
+            else:
+                if res_flag == 0:
+                    failed_list.append(old_path)
+                elif res_flag == 2:
+                    skip_list.append(old_path)
+                else:
+                    new_old_record[new_path] = old_path  # 保存原文件信息，格式为"{new_file: old_file, }"
+    # 写出到记录文件和日志
+    if len(new_old_record):
+        write_time, log_time = get_times()  # 获取当前时间的两种格式
+        record_path = os.path.join(settings.RECORD_DIR, '%s_%s.txt' % ("new_old_record", write_time))
+        export_new_old_record(new_old_record, record_path)  # 将文件剪切前后文件信息导出到new_old_record
+        if deal_mode == 'copy':
+            msg = "【操作文件】  从%s 拷贝%s个项目到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
+        else:
+            msg = "【操作文件】  从%s 剪切%s个项目到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
+        if len(failed_list):
+            failed_path = os.path.join(settings.RECORD_DIR, '%s_%s.txt' % ("failed", write_time))
+            msg += "\n\t\t%s个文件操作失败，文件信息导出到%s" % (len(failed_list), failed_path)
+            with open(failed_path, 'a', encoding="utf-8") as f:
+                for item in failed_list:
+                    f.write('%s\n' % item)
+        if log_flag:
+            logger.operate_logger(msg, log_time)
+
+    result = {"record_path": record_path, 'failed_path': failed_path, 'total_count': total_count, 'new_old_record': new_old_record,'skip_list': skip_list, 'failed_list': failed_list}
+    return result
+
+
+def check_files_overwrite_danger(files, old_dir_path, new_dir_path, rename_flag=True, name_simple=True):
+    """用来检测目标目录路径是否存在同名文件，防止数据覆盖损失
+    :param files: 保存文件信息的集合，可以是dict {name|size|name_size : [path1,path2]} 可以是list [path1,path2]
+    :param old_dir_path: 原目录路径
+    :param new_dir_path: 新目录路径
+    :param rename_flag: 标记是否对文件进行重命名  True 重命名  False 不重命名        主要用在是否原样复制文件 还是加入目录结构
+    :param name_simple: 文件重命名模式  True 简单目录结构  False 绝对目录结构
+    :return: danger_dict # 有数据覆盖风险的文件  数据格式{"src_path" : "dst_path"}
+    """
+    danger_dict = {}  # 有数据覆盖风险的文件  数据格式{"src_path" : "dst_path"}
     if rename_flag:  # 看是否需要对文件进行重命名，即是否需要加上目录描述
         # 从多级目录往单级目录里面拷贝或者移动文件时可能会出现同名文件，所有加上对应目录层级描述
         # 格式：当name_simple为True 为相对目标目录的目录层级  为False 为原文件的绝对目录层级
@@ -580,46 +856,18 @@ def deal_files(files, old_dir_path, new_dir_path, deal_mode="move", rename_flag=
         for item in files:
             for old_path in files[item]:
                 new_path = get_new_path_func(old_path, old_dir_path, new_dir_path, name_simple)  # 调用make_new_path方法 获得新路径
-                try:
-                    deal_func(old_path, new_path)  # 由上面赋值的函数名变量调用函数代码
-                except Exception as e:
-                    failed_list.append(old_path)
-                    print("操作%s文件失败，详情请查看错误日志！" % old_path)
-                    # logger.error_logger(e)
-                    logger.file_error_logger(old_path, e)
-                else:
-                    new_old_record[new_path] = old_path  # 保存原文件信息，格式为"{new_file: old_file, }"
+                if os.path.exists(new_path):
+                    print("src_path: %s 在目标路径已存在同名目标文件/目录 %s 有数据覆盖风险！" % (old_path, new_path))
+                    danger_dict[old_path] = new_path
+
     elif isinstance(files, list):
         for old_path in files:
             new_path = get_new_path_func(old_path, old_dir_path, new_dir_path, name_simple)  # 调用make_new_path方法 获得新路径
-            try:
-                deal_func(old_path, new_path)
-            except Exception as e:
-                failed_list.append(old_path)
-                print("操作%s文件失败，详情请查看错误日志！" % old_path)
-                # logger.error_logger(e)
-                logger.file_error_logger(old_path, e)
-            else:
-                new_old_record[new_path] = old_path  # 保存原文件信息，格式为"{new_file: old_file, }"
-    # 写出到记录文件和日志
-    if len(new_old_record):
-        write_time, log_time = get_times()  # 获取当前时间的两种格式
-        record_path = os.path.join(settings.RECORD_DIR, '%s %s.txt' % ("new_old_record", write_time))
-        export_new_old_record(new_old_record, record_path)  # 将文件剪切前后文件信息导出到new_old_record
-        if deal_mode == 'copy':
-            msg = "从%s 拷贝%s个项目到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
-        else:
-            msg = "从%s 剪切%s个项目到%s，新旧文件名导出到%s" % (old_dir_path, len(new_old_record), new_dir_path, record_path)
-        if len(failed_list):
-            failed_path = os.path.join(settings.RECORD_DIR, '%s %s.txt' % ("failed", write_time))
-            msg += "\n\t\t%s个文件操作失败，文件信息导出到%s" % (len(failed_list), failed_path)
-            with open(failed_path, 'a', encoding="utf-8") as f:
-                for item in failed_list:
-                    f.write('%s\n' % item)
-        if log_flag:
-            logger.operate_logger(msg, log_time)
+            if os.path.exists(new_path):
+                print("src_path: %s 在目标路径已存在同名目标文件/目录 %s 有数据覆盖风险！" % (old_path, new_path))
+                danger_dict[old_path] = new_path
 
-    return record_path
+    return danger_dict
 
 
 def restore_file_by_record(record_path, log_flag=True):
@@ -640,13 +888,40 @@ def restore_file_by_record(record_path, log_flag=True):
             move_file(new_file, old_file)
             restore_list.append("%s  ->  %s" % (new_file, old_file))
     if len(restore_list):
-        print_str = "根据记录%s 还原了%s个文件，还原文件信息记录到%s" % (record_path, len(restore_list), restore_record_path)
+        print_str = "根据记录 %s 还原了 %s 个文件，还原文件信息记录到%s" % (record_path, len(restore_list), restore_record_path)
         if log_flag:
-            logger.record_logger(restore_list, restore_record_path, print_str)
+            logger.record_logger2(restore_list, restore_record_path, print_str)
     else:
         print("未找到可以还原的文件！")
 
     return restore_record_path, len(restore_list)
+
+
+def undo_restore_file_by_record(record_path, move_flag=True):
+    """
+    用于从record_path读取new_old_record记录来撤销还原文件，即根据new_old_record 重做一次文件移动操作
+    :param record_path: new_old_record记录文件路径
+    :param move_flag: 是否剪切文件  True 剪切 False 复制
+    """
+    count = 0  # 用来统计操作了多少个文件
+    new_old_record = import_new_old_record(record_path)  # 导入new_old_record记录
+    skip_flag = settings.SKIP_FLAG
+    if move_flag:
+        func = move_file_skip if skip_flag else move_file_force
+    else:
+        func = copy_file_skip if skip_flag else copy_file_force
+    for new_file in new_old_record:
+        old_file = new_old_record[new_file]
+        if os.path.exists(old_file):
+            func(old_file, new_file)
+            count += 1
+    # if count:
+    #     print_str = "根据记录%s 重新移动了%s个文件" % (record_path, count)
+    #     logger.operate_logger(print_str)
+    else:
+        print("未找到可以还原的文件！")
+
+    return count
 
 
 def remove_file_by_info(dir_path, record_path, safe_flag=settings.SAFE_FLAG):
@@ -688,7 +963,7 @@ def remove_file_by_info(dir_path, record_path, safe_flag=settings.SAFE_FLAG):
         # 写出到安全删除记录文件
         del_count = len(safe_del_record)
         if del_count:
-            del_record_path = os.path.join(settings.RECORD_DIR, 'safe_del %s.txt' % os.path.basename(safe_del_dir))
+            del_record_path = os.path.join(settings.RECORD_DIR, 'safe_del_%s.txt' % os.path.basename(safe_del_dir))
             export_new_old_record(safe_del_record, del_record_path)
             msg = "删除了%s 记录中的%s个文件！被删除文件信息记录到%s" % (record_path, len(safe_del_record), del_record_path)
             logger.operate_logger(msg)
@@ -735,7 +1010,7 @@ def remove_file_by_record(record_path, safe_flag=settings.SAFE_FLAG):
         # 写出到安全删除记录文件
         del_count = len(safe_del_record)
         if del_count:
-            del_record_path = os.path.join(settings.RECORD_DIR, 'safe_del %s.txt' % os.path.basename(safe_del_dir))
+            del_record_path = os.path.join(settings.RECORD_DIR, 'safe_del_%s.txt' % os.path.basename(safe_del_dir))
             export_new_old_record(safe_del_record, del_record_path)
             msg = "删除了%s 记录中的%s个文件！被删除文件信息记录到%s" % (record_path, len(safe_del_record), del_record_path)
             logger.operate_logger(msg)
@@ -808,13 +1083,7 @@ def remove_empty_dir(dir_path):
         if not os.listdir(item):  # 判断是否空文件夹
             os.rmdir(item)
             del_list.append(item)
-    if len(del_list):
-        msg = "清除了%s  下%s个空文件夹!删除的空文件夹信息记录到%s" % (dir_path, len(del_list), settings.DEL_RECORD_PATH)
-        logger.record_logger(del_list, settings.DEL_RECORD_PATH, msg)  # 记录日志
-    else:
-        msg = "%s  下没有找到空文件夹！" % dir_path
-        print("没有找到空文件夹！")
-    return msg
+    return del_list
 
 
 def export_new_old_record(new_old_record, record_path):
@@ -852,14 +1121,20 @@ def get_file_info(dir_path):
     """
     file_list = []
     # 用于储存文件信息，记录数据格式为[{"name": file_name, "size": file_size, "mtime": file_mtime, "path": file_path}]
-    for root, dirs, files in os.walk(dir_path):
-        for file_name in files:
-            # 获取文件信息
-            file_path = os.path.join(root, file_name)
-            file_size = os.path.getsize(file_path)  # 得到的是int数据
-            file_mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(file_path)))
-            file = {"name": file_name, "size": file_size, "mtime": file_mtime, "path": file_path}
-            file_list.append(file)
+    if os.path.isfile(dir_path):
+        file_size = os.path.getsize(dir_path)  # 得到的是int数据
+        file_mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(dir_path)))
+        file = {"name": os.path.basename(dir_path), "size": file_size, "mtime": file_mtime, "path": dir_path}
+        file_list.append(file)
+    else:
+        for root, dirs, files in os.walk(dir_path):
+            for file_name in files:
+                # 获取文件信息
+                file_path = os.path.join(root, file_name)
+                file_size = os.path.getsize(file_path)  # 得到的是int数据
+                file_mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(file_path)))
+                file = {"name": file_name, "size": file_size, "mtime": file_mtime, "path": file_path}
+                file_list.append(file)
     return file_list  # 返回遍历完成的文件信息
 
 
@@ -886,10 +1161,10 @@ def export_file_info(dir_path):
     :param dir_path: 要导出文件信息的目录路径
     :return: 信息文件路径，文件个数
     """
-    if not os.path.isdir(dir_path):  # 判断是否为目录
-        print("输入的目录不是文件夹！")
-        # raise TypeError("输入的目录不是文件夹！")
-        return
+    # if not os.path.isdir(dir_path):  # 判断是否为目录
+        # print("输入的目录不是文件夹！")
+        # # raise TypeError("输入的目录不是文件夹！")
+        # return
     print("正在导出文件信息...")
     file_list = get_file_info(dir_path)  # 调用get_file_info函数获取文件信息列表
     # file_list: [{"name": file_name, "size": file_size, "mtime": file_mtime, "path": file_path}, ]
@@ -929,4 +1204,71 @@ def import_file_info(file_path):
                 break
     return file_list  # 返回遍历完成的文件信息
 
+
+def get_photo_time(file_path):
+    """获取照片的exif信息"""
+    FIELD = 'EXIF DateTimeOriginal'
+    fd = open(file_path, 'rb')
+    tags = exifread.process_file(fd)
+    fd.close()
+    # 显示图片所有的exif信息
+    # print("showing res of getExif: \n")
+    # print(tags)
+    # print("\n\n\n\n");
+    if FIELD in tags:
+        photo_time = str(tags[FIELD])  # 获取照片拍摄时间 # 获取到的结果格式类似为：2018:12:07 03:10:34
+        # photo_time_str = (photo_time).replace(':', '').replace(' ', '_')  # 获取结果格式类似为：20181207_031034
+        # print("\nstr(tags[FIELD]): %s" % (photo_time))  # 获取到的结果格式类似为：2018:12:07 03:10:34
+        # print("\nstr(tags[FIELD]).replace(':', '').replace(' ', '_'): %s" % photo_time_str)  # 获取结果格式类似为：20181207_031034
+        # print("\nos.path.splitext(filename)[1]: %s" % os.path.splitext(filename)[1])  # 获取了图片的格式，结果类似为：.jpg
+        # print("\n%s的拍摄时间是: %s年%s月%s日%s时%s分" % (
+        # filename, photo_time_str[0:4], photo_time_str[4:6], photo_time_str[6:8], photo_time_str[9:11],
+        # photo_time_str[11:13]))
+        photo_time_str = "%s-%s-%s %s:%s:%s" % (photo_time[0:4], photo_time[5:7], photo_time[8:10], photo_time[11:13], photo_time[14:16], photo_time[17:])
+    else:
+        photo_time_str = None
+    return {'photo_time': photo_time_str}
+
+
+def latitude_and_longitude_convert_to_decimal_system(*arg):
+    """
+    经纬度转为小数, param arg:
+    :return: 十进制小数
+    """
+    return float(arg[0]) + ((float(arg[1]) + (float(arg[2].split('/')[0]) / float(arg[2].split('/')[-1]) / 60)) / 60)
+
+
+def get_image_exif(pic_path):
+    """获取照片的GPS信息"""
+    GPS = {}
+    date = ''
+    with open(pic_path, 'rb') as f:
+        tags = exifread.process_file(f)
+        for tag, value in tags.items():
+            if re.match('GPS GPSLatitudeRef', tag):
+                GPS['GPSLatitudeRef'] = str(value)
+            elif re.match('GPS GPSLongitudeRef', tag):
+                GPS['GPSLongitudeRef'] = str(value)
+            elif re.match('GPS GPSAltitudeRef', tag):
+                GPS['GPSAltitudeRef'] = str(value)
+            elif re.match('GPS GPSLatitude', tag):
+                try:
+                    match_result = re.match('\[(\w*),(\w*),(\w.*)/(\w.*)\]', str(value)).groups()
+                    GPS['GPSLatitude'] = int(match_result[0]), int(match_result[1]), int(match_result[2])
+                except:
+                    deg, min, sec = [x.replace(' ', '') for x in str(value)[1:-1].split(',')]
+                    GPS['GPSLatitude'] = latitude_and_longitude_convert_to_decimal_system(deg, min, sec)
+            elif re.match('GPS GPSLongitude', tag):
+                try:
+                    match_result = re.match('\[(\w*),(\w*),(\w.*)/(\w.*)\]', str(value)).groups()
+                    GPS['GPSLongitude'] = int(match_result[0]), int(match_result[1]), int(match_result[2])
+                except:
+                    deg, min, sec = [x.replace(' ', '') for x in str(value)[1:-1].split(',')]
+                    GPS['GPSLongitude'] = latitude_and_longitude_convert_to_decimal_system(deg, min, sec)
+            elif re.match('GPS GPSAltitude', tag):
+                GPS['GPSAltitude'] = str(value)
+            elif re.match('.*Date.*', tag):
+                date = str(value)
+                date = "%s-%s-%s %s:%s:%s" % (date[0:4], date[5:7], date[8:10], date[11:13], date[14:16], date[17:])
+    return {'GPS_information': GPS, 'date_information': date}
 

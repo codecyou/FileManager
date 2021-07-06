@@ -84,50 +84,40 @@ def match(file_path, func_info, frame, read_bytes=10240):
     return ret
 
 
-def match2(file_path, args, frame, read_bytes=8092):
+def match2(file_path, args, win, read_bytes=8092):
     """
     用于计算文件的hash值
-    :param func_info: ("sha1", hashlib.sha1), 方法信息元组
     :param file_path: 文件地址
+    :param args: hash值算法元组('sha1', 'sha256', 'md5')
+    :param win: 窗口对象
     :param read_bytes: 一次读取的字节数
     :return: ret={”算法类型“:func.hexdigest()}
     """
-    # h = hashlib.sha1()
-    # func = func_info[1]()
     global rate_value
     rate_value = 0  # 进度值置零还原
     func_list = []
-    # print(args)
     for item in args:
         if item in func_dict:
             func_list.append(func_dict[item][1]())
-    # print(func_list)
     total_size = os.path.getsize(file_path)
-    # count = 0  # 用以计算读取文件数据段次数
-    frame.pb1["maximum"] = total_size
-    frame.pb1["value"] = 0
+    win.pb1["maximum"] = total_size
+    win.pb1["value"] = 0
     if total_size == 0:
         print("\r该文件内容为空！", end='')
-    threading.Thread(target=show_rate, args=(frame, total_size)).start()
+    threading.Thread(target=show_rate, args=(win, total_size)).start()
     with open(file_path, 'rb') as f:
         while True:
             rate_value += read_bytes
             data = f.read(read_bytes)
             if data:
-                # h.update(data)
                 for func in func_list:
                     func.update(data)
             else:
                 rate_value = total_size  # 为防止主线程，子线程还没运行完，导致进度条出现bug的问题
                 break
-    # ret = h.hexdigest()
-    # ret = {func_info[0]: func.hexdigest()}
     ret = {}
     for index, item in enumerate(args):
-        # print(index, item)
         ret[item] = func_list[index].hexdigest()
-    # frame.pb1["value"] = total_size  # 为防止主线程，子线程还没运行完，导致进度条出现bug的问题
-    # print(str(ret))
     return ret
 
 
@@ -155,7 +145,7 @@ def cal_hash_by_path(file_path, args, frame):
         mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(file_path)))
         ret = {"size": size, "mtime": mtime}  # 用于储存单个文件的hash值信息{'size':xxx, "mtime":xxx, 'sha1':xxx,'sha256':xxx,'md5':xxx}
         # 如果是exe 或者dll则获取文件版本信息
-        if file_path.endswith("exe") or file_path.endswith("dll"):
+        if os.path.splitext(file_path)[1].lower() in ['.exe', '.dll', '.msi']:
             try:
                 version = getFileVersion(file_path)
                 ret["version"] = version
@@ -163,14 +153,9 @@ def cal_hash_by_path(file_path, args, frame):
                 print("Exception: %s" % e)
                 pass
         print("正在计算: %s" % file_path)
-        # for item in args:
-        # 	if item in func_dict:
-        # ret.update(match(file_path, func_dict[item], frame))
-        # result = {file_path: ret}  # 用于储存结果{file:{"sha1":xxx,“sha256”:xxx,},}
         ret.update(match2(file_path, args, frame))
         result = {file_path: ret}
-        # print(str(result))
-        print_result(result, frame)
+        show_result(result, frame)
         return result
     elif os.path.isdir(file_path):  # 是目录
         # 获取文件路径列表
@@ -205,28 +190,28 @@ def cal_hash_by_list(file_list, args, frame):
     return result
 
 
-def writeHash(hash_path, str):
+def writeHash(output_path, content):
     """
     用于将计算的到的hash值写出到文件
-    :param hash_path: hash值记录文件路径
-    :param str: 字符串内容
+    :param output_path: hash值记录文件路径
+    :param content: 字符串内容
     :return:
     """
     print("正在将计算的hash值记录到文件...")
-    with open(hash_path, 'w', encoding='utf-8') as f:
-        f.write(str)
-    print("记录hash值到%s 完成！" % hash_path)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print("记录hash值到 %s 完成！" % output_path)
 
 
-def print_result(temp_result, frame):
+def show_result(temp_result, win):
     """
     获取用于输出到屏幕和写出到文件的result内容
     :param temp_result: hash值结果集
-    :param frame: GUI 窗口，用于输出数据
+    :param win: GUI 窗口，用于输出数据
     :return:
     """
     for file in temp_result:
-        frame.scr.insert("end", '%s:\t%s\n' % ("文件", file))
+        win.scr.insert("end", '%s:\t%s\n' % ("文件", file))
         for item in temp_result[file]:
             if item == "size":
                 info_str = "%s:\t%s" % ("大小", temp_result[file][item])
@@ -236,8 +221,8 @@ def print_result(temp_result, frame):
                 info_str = "%s:\t%s" % ("文件版本", temp_result[file][item])
             else:
                 info_str = "%s:\t%s" % (item, temp_result[file][item])
-            if frame.upper.get():
+            if win.upper.get():
                 info_str = info_str.upper()
-            frame.scr.insert("end", '%s\n' % info_str)
-        frame.scr.insert("end", "\n")
-        frame.scr.see("end")
+            win.scr.insert("end", '%s\n' % info_str)
+        win.scr.insert("end", "\n")
+        win.scr.see("end")

@@ -8,7 +8,6 @@ from bin.MainPage import *
 Mytools.my_init()  # 初始化程序运行环境，创建对应的文件目录
 # 创建GUI窗体
 root = tk.Tk()
-root.title('FileManager     design by wyl')
+root.title('FileManager')
 MainPage(root)
 root.mainloop()
-
