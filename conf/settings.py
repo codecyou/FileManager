@@ -44,6 +44,9 @@ def get_config_list():
 def export_config():
     """用于保存配置到文件"""
     source_config()
+    conf_dir = os.path.dirname(configFile)
+    if not os.path.exists(conf_dir):
+        os.makedirs(conf_dir)
     with open(configFile, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False)  # 记录配置信息
         print(config)
