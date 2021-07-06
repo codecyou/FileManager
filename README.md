@@ -22,8 +22,31 @@
 所有的文件删除、文件更新操作进行防呆保护，最大限度保证数据安全！所
 有操作都有日志，方便追溯和还原。涉及程序配置内容修改的操作会有权限验证
 
+使用说明:
+方式一：源码运行，
+    注意：运行源码如果不是在pycharm中运行，项目代码所有目录下都要新建一个空白__init__.py文件
+    1.程序所需第三方包opencv,pillow,windnd,moviepy,natsort
+    安装 pip install xxxx
+    2.进入bin目录
+    运行方式 python filemanager.py
 
-以下为部分程序功能界面：
+方式二：
+直接下载打包好的filemanager.zip
+解压后运行目录下的filemanager.exe 即可
+
+
+注意事项:
+	1.除非必要否则不要轻易修改设置内容
+	2.数据无价，谨慎操作！
+
+
+注意：
+1.直接拖拽文件到程序目录时，如果路径包含表情符号等特殊字符，在获取路径时会出错，这时候从系统资源管理器复制路径直接填到程序里也可以，或者修改文件名，使文件名不出现表情符号等特殊字符
+例如：J:\直播\录屏\晓琴\晓琴🌸古筝\晓琴🌸古筝_2021-05-20-19-45-00.mp4 这种路径中出现特殊字符，直接拖拽进入程序，获取路径时候特殊字符会出错，要不然就删掉特殊字符要不然就手动填写路径，这样程序也能运行
+2.使用查找损坏视频功能的时候要确保程序路径没有空格，否则运行可能会出错（直接运行打包好的exe，不建议使用该功能，建议执行源码的时候使用）
+
+
+以下为部分程序功能界面：(详见使用文档目录)
 ![文件去重hash方式](https://github.com/codecyou/FileManager/blob/main/FileManager%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E/%E6%96%87%E4%BB%B6%E5%8E%BB%E9%87%8D%EF%BC%88hash%E6%A8%A1%E5%BC%8F%EF%BC%89%202021-07-07_044228.jpg)
 ![计算hash值](https://github.com/codecyou/FileManager/blob/main/FileManager%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E/%E8%AE%A1%E7%AE%97hash%E5%80%BC%202021-07-07_051638.jpg)
 ![以图搜图](https://github.com/codecyou/FileManager/blob/main/FileManager%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E/%E4%BB%A5%E5%9B%BE%E6%90%9C%E5%9B%BE%202021-07-07_052708.jpg)
