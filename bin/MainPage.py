@@ -4,23 +4,36 @@ from bin.view import *   # 菜单栏对应的各个子页面
 class MainPage(object):
     def __init__(self, master=None):
         self.fuc_dict = {
-            '1.导出文件信息': self.exportData,
-            '2.查找重复文件': self.querySameData,
-            '3.文件备份与同步': self.countData,
-            '4.还原文件': self.restoreFile,
-            '5.删除文件': self.delFile,
-            '6.删除空文件夹': self.clearEmptyDir,
-            "7.搜索文件或目录": self.queryData,
-            "8.拷贝目录结构": self.copyDir,
-            "9.比对文本文件内容": self.compareTxt,
-            "10.计算文件的hash值": self.calHash,
-            "A.提取视频帧图像": self.getImg,
-            "B.计算图片相似度,找出相似图片": self.calImgSim,
-            "C.找出相似视频": self.calVideoSim,
-            "D.以图搜图": self.searchImage,
-            "D.以视频搜相似视频": self.searchVideo,
+            '导出文件信息': self.exportData,
+            '查找重复文件': self.querySameData,
+            "查找重复文件(hash方式)": self.findSameFilesByHash,
+            '文件备份与同步': self.countData,
+            '还原文件': self.restoreFile,
+            '删除文件': self.delFile,
+            '删除空文件夹': self.clearEmptyDir,
+            "搜索文件或目录": self.queryData,
+            "拷贝目录结构": self.copyDir,
+            "比对文本文件内容": self.compareTxt,
+            "计算hash值": self.calHash,
+            "校对字符串": self.compStr,
+            "提取视频帧图像": self.getImg,
+            "查找相似图片": self.calImgSim,
+            "查找相似视频": self.calVideoSim,
+            "以图搜图": self.searchImage,
+            "以视频搜相似视频": self.searchVideo,
+            # "移动文件到父目录": self.moveFilesToPardir,
+            "批量重命名": self.rename,
+            "合并视频": self.videoMerge,
+            "裁剪视频": self.videoCut,
+            "批量裁剪视频": self.videosCut,
+            "提取音频/转换音频": self.getAudio,
+            # "剪切音频": self.audioCut,
+            "找出损坏的视频文件": self.findBadVideo,
+            "获取时间戳": self.getTimestamp,
+            "修改文件时间戳": self.changeTimestamp,
         }
         self.root = master  # 定义内部变量root
+        self.root.protocol('WM_DELETE_WINDOW', self.closeWindow)  # 绑定窗口关闭事件，防止计时器正在工作导致数据丢失
         # 设置窗口大小
         winWidth = 900
         winHeight = 750
@@ -52,15 +65,27 @@ class MainPage(object):
         self.calHashPage = CalHashFrame(self.root)
         self.searchImagePage = SearchImgFrame(self.root)
         self.searchVideoPage = SearchVideoFrame(self.root)
+        self.findSameFilesByHashPage = FindSameFilesByHashFrame(self.root)
+        self.compStrPage = CompStrFrame(self.root)
+        self.renamePage = RenameFrame(self.root)
+        self.getAudioPage = GetAudioFrame(self.root)
+        self.videoMergePage = VideoMergeFrame(self.root)
+        self.videoCutPage = VideoCutFrame(self.root)
+        self.videosCutPage = VideosCutFrame(self.root)
+        self.getTimestampPage = GetTimestampFrame(self.root)
+        self.findBadVideoPage = FindBadVideoFrame(self.root)
+        self.changeTimestampPage = ChangeTimestampFrame(self.root)
         self.aboutPage = AboutFrame(self.root)
         self.settingPage = SettingFrame(self.root)
 
         self.pages = [self.exportPage, self.querySamePage, self.countPage, self.restorePage, self.clearEmptyDirPage,
                       self.copyDirPage, self.getImgPage, self.calImgSimPage, self.calVideoSimPage, self.delFilePage,
                       self.queryPage, self.compareTxtPage, self.calHashPage, self.aboutPage, self.settingPage,
-                      self.searchImagePage, self.searchVideoPage]
+                      self.searchImagePage, self.searchVideoPage, self.findSameFilesByHashPage, self.compStrPage,
+                      self.renamePage, self.getAudioPage, self.videoMergePage, self.videoCutPage, self.videosCutPage, self.getTimestampPage,
+                      self.findBadVideoPage, self.changeTimestampPage]
 
-        self.exportPage.pack()  # 默认显示数据录入界面
+        self.exportPage.pack()  # 默认显示文件信息导出界面
         menubar = tk.Menu(self.root)
         optionmenu = tk.Menu(menubar, tearoff=0)
         # 将上面定义的空菜单命名为File，放在菜单栏中，就是装入那个容器中
@@ -85,6 +110,15 @@ class MainPage(object):
                 page.pack()
                 continue
             item.pack_forget()
+
+    def closeWindow(self):
+        """用来处理关闭窗口按钮在退出系统前的询问"""
+        ans = mBox.askyesno(title="Warning", message="是否要退出程序？(请务必确认没有正在执行的任务！)")
+        if not ans:
+            # 选择否/no 不退出
+            return
+        # 退出程序
+        self.root.destroy()
 
     def exportData(self):
         self.display(self.exportPage)
@@ -130,6 +164,36 @@ class MainPage(object):
 
     def calHash(self):
         self.display(self.calHashPage)
+
+    def findSameFilesByHash(self):
+        self.display(self.findSameFilesByHashPage)
+
+    def compStr(self):
+        self.display(self.compStrPage)
+
+    def rename(self):
+        self.display(self.renamePage)
+
+    def getAudio(self):
+        self.display(self.getAudioPage)
+
+    def videoMerge(self):
+        self.display(self.videoMergePage)
+
+    def videoCut(self):
+        self.display(self.videoCutPage)
+
+    def videosCut(self):
+        self.display(self.videosCutPage)
+
+    def getTimestamp(self):
+        self.display(self.getTimestampPage)
+
+    def findBadVideo(self):
+        self.display(self.findBadVideoPage)
+
+    def changeTimestamp(self):
+        self.display(self.changeTimestampPage)
 
     def aboutDisp(self):
         self.display(self.aboutPage)
