@@ -27,7 +27,7 @@ base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(base_dir)
 from conf import settings
 from core import SynTools, hash_core, SearchFiles, Mytools, CompareTxt, ImageTools, VideoTools, logger, ModifyTimestamp
-from core.Check import *
+from core.check import *
 from core.VideoTools import *
 
 
